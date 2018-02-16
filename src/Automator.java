@@ -3,12 +3,10 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import static java.lang.Math.pow;
 
 public class Automator {
     private HashMap<String, Boolean> grid_leveling = new HashMap<>();
     private ArrayList<boolean[]> automation_grid = new ArrayList<>();
-    private String rule;
 
     public static String toLen8BinaryString(byte value) {
         StringBuilder s = new StringBuilder();
@@ -42,12 +40,10 @@ public class Automator {
         boolean[] row1 = new boolean[size];
         row1[size/2 + 1] = true;
         this.automation_grid.add(row1);
-        this.rule = toLen8BinaryString(rule);
-
-        System.out.println(this.rule);
+        String s_rule = toLen8BinaryString(rule);
 
         for (byte i = 0; i < 8; i++) {
-            this.grid_leveling.put(toLen3BinaryString(i), this.rule.charAt(this.rule.length() - i - 1) == '1');
+            this.grid_leveling.put(toLen3BinaryString(i), s_rule.charAt(s_rule.length() - i - 1) == '1');
         }
     }
 
