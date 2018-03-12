@@ -1,21 +1,17 @@
 import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Scanner;
 import java.util.Set;
 
 import static java.awt.event.KeyEvent.*;
 import static java.lang.Integer.parseInt;
 
-@SuppressWarnings("ALL")
-public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyListener, MouseListener {
-    Set<Point> active_cells = new HashSet<>();
+public class GameOfLife extends JPanel implements ActionListener, KeyListener, MouseListener, MouseMotionListener, MouseWheelListener {
+    private Set<Point> active_cells = new HashSet<>();
     private int width;
     private int height;
     private int grid_split;
@@ -23,19 +19,24 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
 
     private Timer timer;
 
-    private int count_surrounding_population_non_modular(int x, int y) {
+    private int mouse_down_x;
+    private int mouse_down_y;
+    private int offset_x;
+    private int offset_y;
+
+    private int count_surrounding_population(int x, int y) {
         int count = 0;
 
         for (int i = x - 1; i <= x + 1; i++) {
             for (int j = y - 1; j <= y + 1; j++) {
-                // Check to prevent OutOfBoundsException
-                if (i < 0 || j < 0 || i >= width || j >= height) {
+                // Check to prevent OutOfBoundsException in non-toroid mode.
+                if (!toroid_mode && (i < 0 || j < 0 || i >= width || j >= height)) {
                     continue;
                 }
                 if (i == x && j == y) {
                     continue;
                 }
-                if (active_cells.contains(new Point(i,j))) {
+                if (toroid_mode ? active_cells.contains(new Point((i + width) % width, (j + height) % height)) : active_cells.contains(new Point(i,j))) {
                     count++;
                 }
             }
@@ -44,75 +45,58 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
         return count;
     }
 
-    private int count_surrounding_population_modular(int x, int y) {
-        int count = 0;
-
-        for (int i = x - 1; i <= x + 1; i++) {
-            for (int j = y - 1; j <= y + 1; j++) {
-                if (i == x && j == y) {
-                    continue;
-                }
-                if (active_cells.contains(new Point((i + width) % width, (j + height) % height))) {
-                    count++;
-                }
-            }
-        }
-
-        return count;
-    }
-
-    public GameOfLifeOptimize(int width, int height, Set<Point> active_cells) {
+    public GameOfLife(int width, int height, Set<Point> active_cells) {
         setBackground(Color.BLACK);
         addMouseListener(this);
+        addMouseMotionListener(this);
+        addMouseWheelListener(this);
         addKeyListener(this);
         setFocusable(true);
         requestFocus();
 
-        this.timer = new Timer(100, this);
+        this.timer = new Timer(50, this);
         this.timer.start();
 
         this.grid_split = 20;
 
         this.active_cells = active_cells;
-        this.width = width/grid_split;
-        this.height = height/grid_split;
-        this.toroid_mode = false;
+        this.width = width;
+        this.height = height;
+        this.toroid_mode = true;
     }
 
     @Override
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
 
-        drawGridLines(g);
+        //if (grid_split > 3) {
+            drawGridLines(g);
+        //}
         drawGrid(g);
 
-        g.setColor(Color.WHITE);
         //g.drawString("Toroid mode: " + ((this.toroid_mode) ? "ON" : "OFF"), 10, 10);
     }
 
     private void drawGridLines(Graphics g) {
         g.setColor(Color.GRAY);
 
-        for (int i = 0; i <= width*grid_split; i++) {
-            g.fillRect(i-1, 0, 2, height*grid_split);
+        for (int i = 0; i <= width; i++) {
+            int start = offset_y > 0 ? offset_y : 0;
+            int end = offset_y > 0 ? height*grid_split : height*grid_split + offset_y;
+            g.fillRect(((i*grid_split)-1) + offset_x, start, 2, end);
         }
 
-        for (int i = 0; i <= height*grid_split; i++) {
-            g.fillRect(0, i-1, width*grid_split, 2);
+        for (int i = 0; i <= height; i++) {
+            int start = offset_x > 0 ? offset_x : 0;
+            int end = offset_x > 0 ? width*grid_split : width*grid_split + offset_x;
+            g.fillRect(start, (i*grid_split-1) + offset_y, end, 2);
         }
     }
 
     private void drawGrid(Graphics g) {
-        for (int i = 0; i < width; i++) {
-            for (int j = 0; j < height; j++) {
-                if (active_cells.contains(new Point(i,j))) {
-                    g.setColor(Color.WHITE);
-                }
-                else {
-                    g.setColor(Color.BLACK);
-                }
-                g.fillRect(grid_split*i, grid_split*j, grid_split-1, grid_split-1);
-            }
+        g.setColor(Color.WHITE);
+        for (Point p:active_cells) {
+            g.fillRect(grid_split*p.x + offset_x, grid_split*p.y + offset_y, grid_split-1, grid_split-1);
         }
     }
 
@@ -121,13 +105,7 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
 
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
-                int surround;
-                if (toroid_mode) {
-                    surround = count_surrounding_population_modular(i, j);
-                }
-                else {
-                    surround = count_surrounding_population_non_modular(i, j);
-                }
+                int surround = count_surrounding_population(i, j);
 
                 if (active_cells.contains(new Point(i,j))) {
                     if (surround == 2 || surround == 3) {
@@ -149,36 +127,6 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
     public void actionPerformed(ActionEvent e) {
         active_cells = evolve();
         repaint();
-    }
-
-    public static void main(String[] args) {
-
-
-        int window_width = Toolkit.getDefaultToolkit().getScreenSize().width;
-        int window_height = Toolkit.getDefaultToolkit().getScreenSize().height;
-
-        JFrame window = new JFrame();
-        window.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        GameOfLifeOptimize content = new GameOfLifeOptimize(1440, 900, new HashSet<>());
-        window.setContentPane(content);
-        window.setSize(window_width, window_height);
-        window.setUndecorated(true);
-        window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        window.setResizable(false);
-        window.setVisible(true);
-    }
-
-    private static void initialize_I_column(boolean[][] grid) {
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 12; j++) {
-                if (i == 0 || i == 2) {
-                    grid[i+(grid.length/2)-1][j+(grid[0].length/2)-6] = j != 1 && j != 2 && j != 4 && j != 7 && j != 9 && j != 10;
-                }
-                else {
-                    grid[i+(grid.length/2)-1][j+(grid[0].length/2)-6] = j != 4 && j != 7;
-                }
-            }
-        }
     }
 
     /**
@@ -231,11 +179,12 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
     private void write_to_file() {
         PrintWriter pw;
         try {
-            pw = new PrintWriter(new FileOutputStream("save_3.txt"));
+            pw = new PrintWriter(new FileOutputStream("puffer_boat.txt"));
         } catch (IOException e) {
             return;
         }
 
+        pw.println(width + " " + height);
         for (Point p:active_cells) {
             pw.println(p.x + " " + p.y);
         }
@@ -247,16 +196,18 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
         Scanner sc;
         Set<Point> new_active_cells = new HashSet<>();
         try {
-            sc = new Scanner(new FileInputStream("save_3.txt"));
+            sc = new Scanner(new FileInputStream("puffer_boat.txt"));
         } catch (IOException e) {
             return null;
         }
 
-        for (int i = 0; sc.hasNextLine(); i++) {
-            String[] tokens = sc.nextLine().split("[ ]");
-            for (int j = 0; j < tokens.length; j++) {
-                new_active_cells.add(new Point(parseInt(tokens[0]), parseInt(tokens[1])));
-            }
+
+        String[] tokens = sc.nextLine().split("[ ]");
+        width = parseInt(tokens[0]);
+        height = parseInt(tokens[1]);
+        while (sc.hasNextLine()) {
+            tokens = sc.nextLine().split("[ ]");
+            new_active_cells.add(new Point(parseInt(tokens[0]), parseInt(tokens[1])));
         }
 
         return new_active_cells;
@@ -277,8 +228,8 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
      */
     @Override
     public void mouseClicked(MouseEvent e) {
-        int tile_x = e.getX()/grid_split;
-        int tile_y = e.getY()/grid_split;
+        int tile_x = (e.getX() - offset_x)/grid_split;
+        int tile_y = (e.getY() - offset_y)/grid_split;
 
         if (active_cells.contains(new Point(tile_x, tile_y))) {
             active_cells.remove(new Point(tile_x, tile_y));
@@ -287,6 +238,31 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
             active_cells.add(new Point(tile_x, tile_y));
         }
         repaint();
+    }
+
+    /**
+     * Scrolling zooms at the center of the screen.
+     */
+    @Override
+    public void mouseWheelMoved(MouseWheelEvent e) {
+        grid_split += e.getWheelRotation();
+        repaint();
+    }
+
+    /**
+     * Dragging the mouse will change the rendered region.
+     */
+    @Override
+    public void mouseDragged(MouseEvent e) {
+        offset_x = e.getX() - mouse_down_x;
+        offset_y = e.getY() - mouse_down_y;
+        repaint();
+    }
+
+    @Override
+    public void mousePressed(MouseEvent e) {
+        this.mouse_down_x = e.getX() - offset_x;
+        this.mouse_down_y = e.getY() - offset_y;
     }
 
     //
@@ -304,11 +280,6 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
     }
 
     @Override
-    public void mousePressed(MouseEvent e) {
-
-    }
-
-    @Override
     public void mouseReleased(MouseEvent e) {
 
     }
@@ -320,6 +291,28 @@ public class GameOfLifeOptimize extends JPanel implements ActionListener, KeyLis
 
     @Override
     public void mouseExited(MouseEvent e) {
+
+    }
+
+    @Override
+    public void mouseMoved(MouseEvent e) {
+
+    }
+
+    public static void main(String[] args) {
+        int window_width = Toolkit.getDefaultToolkit().getScreenSize().width;
+        int window_height = Toolkit.getDefaultToolkit().getScreenSize().height;
+
+        JFrame window = new JFrame();
+        window.setExtendedState(JFrame.MAXIMIZED_BOTH);
+        GameOfLife content = new GameOfLife(800, 175, new HashSet<>());
+        window.setContentPane(content);
+        window.setSize(window_width, window_height);
+        window.setUndecorated(true);
+        window.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        window.setResizable(false);
+        window.setVisible(true);
+
 
     }
 }

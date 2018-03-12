@@ -1,3 +1,5 @@
+package ElementaryCellularAutomation;
+
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
@@ -80,7 +82,7 @@ public class Automator {
     }
 
     public static void main(String[] args) {
-        Automator test = new Automator((byte)30, 1440);
+        Automator test = new Automator((byte)22, 1440);
 
         for (int i = 0; i < 900; i++) {
             test.evolve();
